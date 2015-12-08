@@ -13,203 +13,148 @@
 (defun magit-gh-comments-get-api ()
   (gh-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
 
-(defun magit-gh-pulls-comments-get-api ()
+(defun magit-gh-pull-comments-get-api ()
   (gh-pull-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
 
-(defun magit-gh-pulls-issue-comments-get-api ()
+(defun magit-gh-issue-comments-get-api ()
   (gh-issue-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
 
-(defun magit-gh-pulls-pull-buffer-name (user proj id)
-  "Compose name of PR comments buffer with USER, PROJ and pr ID."
-  (format "*magit-gh-pulls-%s-%s-#%s" user proj id))
-
-(defun magit-gh-pulls-pull-comments-entries (user proj id)
-  "Get the comments of a PR for USER, PROJ and ID.
-A PR can have global comments or comments related to PR commits.
-This function returns both."
-  (let ((repo (magit-gh-pulls-guess-repo)))
-    (when repo
-      (let* ((issue-api (magit-gh-pulls-issue-comments-get-api))
-             (pulls-api (magit-gh-pulls-comments-get-api))
-             (comment-api (magit-gh-comments-get-api))
-             (commit-comments (oref (gh-comments-list-commit comment-api user proj "d3bf9be") :data))
-             (issue-comments (oref (gh-issue-comments-list issue-api user proj id) :data))
-             (pull-comments (oref (gh-pull-comments-list pulls-api user proj id) :data)))
-        (append issue-comments commit-comments)))))
-
-(defun magit-gh-pulls-format-pull-comment-time (time)
-  "Format TIME with 'nice' style for comments."
-  (let ((format "%d/%m/%Y %H:%M:%S"))
-    (format-time-string format (date-to-time time))))
-
-(defun magit-gh-pulls-pull-buffer (user proj id)
-  "Return PR buffer for USER,PROJ and ID if it exists."
-  (get-buffer (magit-gh-pulls-pull-buffer-name user proj id)))
-
-
-;; (defun bff (action)
-;;   (lexical-let ((path path) (commit-id commit-id) (position position))
-;;     (insert-text-button path
-;;                         'follow-link t
-;;                         'help-echo "Click button"
-;;                         'action #'(lambda (button)
-;;                                    (my-open-revision-file path commit-id position)
-;;                                    ))))
-;;TODO:
-;; add link to path
-;; add replay to commit, edit, remove
-;; https://github.com/sigma/gh.el/blob/master/gh-pull-comments.el
-;; https://github.com/areina/magit-gh-pulls/blob/42dc26163eb5791dd8ceb8ce9a8813a2d9a01a3d/magit-gh-pulls.el
-;; {
-;;   "body": "Nice change",
-;;   "in_reply_to": 4
-;; }
-;; (defvar endless/gh-timer (run-with-idle-timer 30 'repeat
-;; #'magit-gh-pulls-reload))
-
-
-(require 'button)
-(defun bff (label action)
-  (insert-text-button label 'follow-link t 'action action))
-
-(defun my-open-revision-file (path commit-id position)
-  (magit-find-file-other-window commit-id path)
-  (interactive)
-  (with-no-warnings
-    (goto-line position)))
-
-(defun my-pulls-comments-replay (comment-id user proj id)
-  (let ((body (read-from-minibuffer "Replay: ")))
-    (let ((repo (magit-gh-pulls-guess-repo))
-          (comment (make-instance 'gh-pull-comments-comment :body body :in-reply-to comment-id)))
-      (when repo
-        (let* ((pulls-api (magit-gh-pulls-comments-get-api))
-               (response (oref (gh-pull-comments-new pulls-api user proj id comment) :data)))
-          (message (format "response: %s " response))
-          )))))
-
-;;TODO: response: ((documentation_url . https://developer.github.com/v3) (message . Not Found))
-(defun my-comment-delete (comment-id user proj)
-  (let ((repo (magit-gh-pulls-guess-repo)))
-    (when repo
-      (let* ((pulls-api (magit-gh-pulls-comments-get-api))
-             (response (oref (gh-pull-comments-delete pulls-api user proj comment-id) :data)))
-        (message (format "response: %s " response))
-        ))))
-
-(defun magit-gh-pulls-insert-pull-comment (comment git-user proj id)
-  "Insert COMMENT attributes into current buffer."
-  (lexical-let ((git-user git-user)
-                (proj proj)
-                (id id)
-                (created-at (magit-gh-pulls-format-pull-comment-time (oref comment :created_at)))
-                (comment-id (oref comment :id))
-                (user (oref (oref comment :user) :login))
-                (body (oref comment :body))
-                ;; (path (oref comment :path))
-                ;; (commit-id (oref comment :commit-id))
-                ;; (original-commit-id (oref comment :original-commit-id))
-                ;; (position (oref comment :position))
-                ;; (original-position (oref comment :original-position))
-                ;; (diff-hunk (oref comment :diff-hunk))
-                )
-    (progn
-      (insert (format "[%s] %s" created-at user))
-      (insert (format "\n[body]\n%s" body))
-      ;; (insert "\npath: ")
-      ;; (bff path #'(lambda (b) (my-open-revision-file path commit-id position)))
-      (insert "\nactions: ")
-      (bff "replay" #'(lambda (b) (my-pulls-comments-replay comment-id git-user proj id)))
-      ;; (insert " ")
-      ;; (bff "delete" #'(lambda (b) (my-comment-delete comment-id git-user proj)))
-      )))
-
-
-
-(defun magit-gh-comments-insert-pulls-commits-comments (user proj id)
-  (let* ((api (gh-pulls-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
-         (commits (oref (gh-pulls-list-commits api user proj id) :data)))
-    (dolist (commit commits)
-      (let ((repo (magit-gh-pulls-guess-repo))
-            (commit-sha (oref commit :sha))
-            (commit-message (oref (oref commit :commit) :message))
-            )
-        (when repo
-          (let* ((comment-api (magit-gh-comments-get-api))
-                 (commit-comments (oref (gh-comments-list-commit comment-api user proj commit-sha) :data)))
-
-            ;; (insert (format "commit: %s\n" commit-sha))
-            ;; (magit-insert-section (commit)
-            ;;   (magit-insert-heading "Pull Requests:")
-            ;;   )
-
-            ;; (magit-gh-pulls-insert-pull-comment)
-            (dolist (comment commit-comments)
-              (magit-gh-pulls-insert-pull-comment comment user proj id)
-              (insert "\n\n")
-              (if (equal comment (car (last commit-comments)))
-                (insert "\n---\n\n")))
-
-
-            ))))))
-
-
-(defun magit-gh-pulls-insert-pull-comments (user proj id)
-  "Insert into current buffer the comments of PR for USER, PROJ and ID."
-  (let ((comments (magit-gh-pulls-pull-comments-entries user proj id)))
-    (when (> (length comments) 0)
-      (insert (format "Comments (%s):\n\n" (length comments)))
-      (dolist (comment comments)
-        (message (format "comment: %s " comment))
-        (magit-gh-pulls-insert-pull-comment comment user proj id)
-        (unless (equal comment (car (last comments)))
-          (insert "\n---\n\n"))))))
-
-
-
-(defun magit-gh-pulls-cleanup-carriage-return ()
+(defun magit-gh-comments-cleanup-carriage-return ()
   "Remove ^M from current buffer."
   (beginning-of-buffer)
   (replace-regexp "" "")
   (beginning-of-buffer))
 
-(defun magit-gh-pulls-insert-pull-info (user proj id)
+(defun magit-gh-comments-format-time (time)
+  "Format TIME with 'nice' style for comments."
+  (let ((format "%d/%m/%Y %H:%M:%S"))
+    (format-time-string format (date-to-time time))))
+
+(defun magit-gh-comments-buffer-name (user proj id)
+  "Compose name of Comments buffer with USER, PROJ and pr ID."
+  (format "*magit-gh-comments-%s-%s-#%s" user proj id))
+
+(defun magit-gh-comments-get-buffer (user proj id)
+  "Return PR buffer for USER,PROJ and ID if it exists."
+  (get-buffer (magit-gh-comments-buffer-name user proj id)))
+
+
+(defun magit-gh-comments-cache-invalidate (cache repo)
+  (pcache-map cache (lambda (k v)
+                      (when (string-match
+                             (format "/repos/%s/%s/" (car repo) (cdr repo))
+                             (car k))
+                        (pcache-invalidate cache k)))))
+
+(defun magit-gh-comments-invalidate ()
+  (let* ((repo (magit-gh-pulls-guess-repo))
+         (pulls-api (magit-gh-pulls-get-api))
+         (comments-api (magit-gh-comments-get-api))
+         (issue-comments-api (magit-gh-issue-comments-get-api))
+         (pull-comments-api (magit-gh-pull-comments-get-api)))
+
+    ;; (magit-gh-comments-cache-invalidate (oref pulls-api :cache) repo)
+    (magit-gh-comments-cache-invalidate (oref comments-api :cache) repo)
+    (magit-gh-comments-cache-invalidate (oref issue-comments-api :cache) repo)
+    (magit-gh-comments-cache-invalidate (oref pull-comments-api :cache) repo)
+    ))
+
+;; TODO: add actions: edit, add/add line comment so replay, delete
+;; actions will need different data when pull, issue, commit comments
+;; when showing pull or commit comments include a path to magit-diff and show the line was commented
+;; TODO: use magit sections, toggle commit body etc for better user expiration
+(defun insert-simple-comments (comments)
+  (dolist (comment comments)
+    (lexical-let ((created-at (magit-gh-comments-format-time (oref comment :created_at)))
+                  (user (oref (oref comment :user) :login))
+                  (body (oref comment :body)))
+      (progn
+        (insert (format "[%s] %s" created-at user))
+        (insert (format "\n[body]\n%s" body))
+        ))))
+
+(defun magit-gh-comments-insert-pull-info (user proj id)
   "Insert info about PR for USER, PROJ and ID into current buffer."
   (let* ((api (magit-gh-pulls-get-api))
          (req (oref (gh-pulls-get api user proj id) :data))
          (title (oref req :title))
          (body (or (oref req :body) "No description provided.")))
-    (insert (format "#%s - %s\n\n%s\n\n" id title body))
+    (insert (format "#%s - %s\n\n%s\n" id title body))))
 
-    (magit-gh-comments-insert-pulls-commits-comments user proj id)
-    ;; (magit-gh-pulls-insert-pull-comments user proj id)
-    (magit-gh-pulls-cleanup-carriage-return)
-    ))
+(defun magit-gh-comments-insert-pull-comments (user proj id)
+  (let ((repo (magit-gh-pulls-guess-repo)))
+    (when repo
+      (let* ((api (magit-gh-pull-comments-get-api))
+             (comments (oref (gh-pull-comments-list api user proj id) :data)))
+        (insert (format "*Pull comments (%s)\n" (length comments)))
+        (insert-simple-comments comments)
+        ))))
 
-(defun magit-gh-pulls-switch-to-pull-buffer (user proj id)
+(defun magit-gh-comments-insert-issue-comments (user proj id)
+  (let ((repo (magit-gh-pulls-guess-repo)))
+    (when repo
+      (let* ((api (magit-gh-issue-comments-get-api))
+             (comments (oref (gh-issue-comments-list api user proj id) :data)))
+        (insert (format "*Issue comments (%s)\n" (length comments)))
+        (insert-simple-comments comments)
+        ))))
+
+(defun magit-gh-comments-insert-commits-comments (user proj id)
+  (let ((repo (magit-gh-pulls-guess-repo)))
+    (when repo
+      (let* ((pulls-api (magit-gh-pulls-get-api))
+             (comments-api (magit-gh-comments-get-api))
+             (commits (oref (gh-pulls-list-commits pulls-api user proj id) :data))
+             comments)
+
+        (dolist (commit commits)
+          (let* ((commit-sha (oref commit :sha))
+                 (commit-comments (oref (gh-comments-list-commit comments-api user proj commit-sha) :data)))
+            (setq comments (append comments commit-comments))))
+
+        (insert (format "*Commits comments (%s)\n" (length comments)))
+        (insert-simple-comments comments)
+        ))))
+
+(defun magit-gh-comments-switch-to-comments-all-buffer (user proj id)
   "Switch to the PR buffer with name composed by USER, PROJ AND ID."
-  (let ((buffer-p (magit-gh-pulls-pull-buffer user proj id))
-        (buffer (get-buffer-create (magit-gh-pulls-pull-buffer-name user proj id))))
+  (lexical-let ((user user) (proj proj) (id id)
+                (buffer-p (magit-gh-comments-get-buffer user proj id))
+                (buffer (get-buffer-create (magit-gh-comments-buffer-name user proj id))))
     (pop-to-buffer buffer)
     (unless buffer-p
-      (magit-gh-pulls-insert-pull-info user proj id)
+      (message "start")
+      (magit-gh-comments-insert-pull-info user proj id)
+      (insert "\n\n")
+      (magit-gh-comments-insert-pull-comments user proj id)
+      (insert "\n\n")
+      (magit-gh-comments-insert-issue-comments user proj id)
+      (insert "\n\n")
+      (magit-gh-comments-insert-commits-comments user proj id)
+
+      (magit-gh-comments-cleanup-carriage-return)
       (beginning-of-buffer)
-      (magit-gh-comments-view-all))))
+      (local-set-key (kbd "q") 'kill-this-buffer)
+      ;;TODO: we want to refresh comments quick, wip
+      (local-set-key (kbd "g") (lambda ()
+                                 (interactive)
+                                 ;; (magit-gh-comments-invalidate)
+                                 ;; remove jumping, erase buffer and write to it again
+                                 ;; (kill-buffer buffer)
+                                 ;; (magit-gh-comments-switch-to-comments-all-buffer user proj id)
+                                 ))
+      ;;TODO: make the buffer ui better re-use magit sections
+      (read-only-mode))))
 
 (defun magit-gh-comments-view-all ()
-  "View PR info."
+  "view all comments for pull requests. For this we need all pull, issue and commits comments"
   (interactive)
   (let ((info (magit-section-value (magit-current-section))))
     (magit-section-case
-      (unfetched-pull (apply `magit-gh-pulls-switch-to-pull-buffer info))
-      (pull (apply `magit-gh-pulls-switch-to-pull-buffer info))
+      (unfetched-pull (apply `magit-gh-comments-switch-to-comments-all-buffer info))
+      (pull (apply `magit-gh-comments-switch-to-comments-all-buffer info))
       (invalid-pull
-       (error magit-gh-pulls-invalid-pr-ref-err)))))
-
-
-
-
-
+       (error "Invalid pull requests")))))
 
 (defun magit-gh-current-revision (current)
   (cond ((derived-mode-p 'magit-revision-mode)
@@ -233,7 +178,13 @@ This function returns both."
          (stop (line-number-at-pos)))
     (- stop cstart)))
 
+
+;;TODO: add confirmation before send ( yes, no, edit )
+;;TODO: change minibuffer to buffer
+;;TODO: add error handling when fail and re-try
 (defun magit-gh-comments-comment-commit-at-point (file &optional other-window)
+  "Add comment to commit on specific position. Use this in magit-diff mode
+on line you want to comment"
   (interactive (list (or (magit-file-at-point)
                          (user-error "No file at point"))
                      current-prefix-arg))
@@ -249,13 +200,16 @@ This function returns both."
              (api (magit-gh-comments-get-api))
              (body (read-from-minibuffer "Create line comment: "))
              (comment (make-instance 'gh-comments-comment :body body :path file :position position)))
-        (message (format "=> %s" position))
         (let ((response (oref (gh-comments-new api owner repo rev comment) :data)))
           (message (format "response: ok"))) ;TODO: add error handling
-        ))))
+        )
+      )))
 
-
+;;TODO: add confirmation before send ( yes, no, edit )
+;;TODO: change minibuffer to buffer
+;;TODO: add error handling when fail and re-try
 (defun magit-gh-comments-comment-commit ()
+  "Add comment to commit use this in magit-diff mode"
   (interactive)
   (let ((repo-info (magit-gh-pulls-guess-repo)))
     (when repo
@@ -270,28 +224,39 @@ This function returns both."
         (message (format "response: ok"))) ;; TODO: add error handling
       )))
 
+(defun magit-gh-comments-switch-to-comments-commit-buffer (comments rev)
+  (let* ((buffer-name (format "*magit-gh-comments-view-commit-comments-#%s" rev))
+         (buffer-p (get-buffer buffer-name))
+         (buffer (get-buffer-create buffer-name)))
+    (pop-to-buffer buffer)
+    (unless buffer-p
+      (insert (format "*Commits comments (%s)\n" (length comments)))
+      (insert-simple-comments comments)
+
+      (beginning-of-buffer)
+      (local-set-key (kbd "q") 'kill-this-buffer)
+      ;;TODO: refresh on g
+      ;;TODO: make the buffer ui better re-use magit sections
+      (read-only-mode)
+      )))
+
+;; also it would be nice to call this fn from magit-status, when over a commit
+;; then we will take rev from it, and if rev is null use magit-gh-current-revision when in
+;; magit-diff
 (defun magit-gh-comments-comment-list ()
+  "List comments for commit in magit-diff"
   (interactive)
   (let ((repo (magit-gh-pulls-guess-repo)))
     (when repo
-      (let* ((current (magit-current-section))
+      (let* ((rev (magit-gh-current-revision (magit-current-section)))
              (user (car repo))
              (proj (cdr repo))
-             (rev (magit-gh-current-revision current))
              (api (magit-gh-comments-get-api))
-             (commit-comments (oref (gh-comments-list-commit api user proj rev) :data))
-             (buffer (get-buffer-create (format "*magit-gh-comments-commit-%s-%s-#%s" user proj rev))))
-
-        (pop-to-buffer buffer)
-        (insert (format "Comments for commit: %s\n\n" rev))
-        (dolist (comment commit-comments)
-          (magit-gh-pulls-insert-pull-comment comment user proj rev)
-          (insert "\n\n")
-          (if (equal comment (car (last commit-comments)))
-              (insert "\n---\n\n")))
-
-        (beginning-of-buffer)
-      ))))
+             (comments (oref (gh-comments-list-commit api user proj rev) :data)))
+        (magit-gh-comments-switch-to-comments-commit-buffer comments rev)
+        ))))
 
 
 (provide 'magit-gh-comments)
+;; End:
+;;; magit-gh-comments.el ends here
