@@ -3,21 +3,22 @@
 (require 'magit)
 (require 'gh)
 (require 'gh-pulls)
-(require 'gh-comments)
+(require 'gh-repos)
 (require 'gh-pull-comments)
 (require 'gh-issue-comments)
 (require 'pcache)
 (require 's)
 
 
-(defun magit-gh-comments-get-api ()
-  (gh-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
+(defun magit-gh-comments-repos-get-api ()
+  (gh-repos-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
 
-(defun magit-gh-pull-comments-get-api ()
+(defun magit-gh-comments-pull-comments-get-api ()
   (gh-pull-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
 
-(defun magit-gh-issue-comments-get-api ()
+(defun magit-gh-comments-issue-comments-get-api ()
   (gh-issue-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
+
 
 (defun magit-gh-comments-cleanup-carriage-return ()
   "Remove ^M from current buffer."
@@ -49,12 +50,12 @@
 (defun magit-gh-comments-invalidate ()
   (let* ((repo (magit-gh-pulls-guess-repo))
          (pulls-api (magit-gh-pulls-get-api))
-         (comments-api (magit-gh-comments-get-api))
-         (issue-comments-api (magit-gh-issue-comments-get-api))
-         (pull-comments-api (magit-gh-pull-comments-get-api)))
+         ;; (comments-api (magit-gh-comments-get-api))
+         (issue-comments-api (magit-gh-comments-issue-comments-get-api))
+         (pull-comments-api (magit-gh-comments-pull-comments-get-api)))
 
     ;; (magit-gh-comments-cache-invalidate (oref pulls-api :cache) repo)
-    (magit-gh-comments-cache-invalidate (oref comments-api :cache) repo)
+    ;; (magit-gh-comments-cache-invalidate (oref comments-api :cache) repo)
     (magit-gh-comments-cache-invalidate (oref issue-comments-api :cache) repo)
     (magit-gh-comments-cache-invalidate (oref pull-comments-api :cache) repo)
     ))
@@ -70,7 +71,7 @@
                   (body (oref comment :body)))
       (progn
         (insert (format "[%s] %s" created-at user))
-        (insert (format "\n[body]\n%s" body))
+        (insert (format "\n[body]\n%s\n\n" body))
         ))))
 
 (defun magit-gh-comments-insert-pull-info (user proj id)
@@ -84,36 +85,72 @@
 (defun magit-gh-comments-insert-pull-comments (user proj id)
   (let ((repo (magit-gh-pulls-guess-repo)))
     (when repo
-      (let* ((api (magit-gh-pull-comments-get-api))
+      (let* ((api (magit-gh-comments-pull-comments-get-api))
              (comments (oref (gh-pull-comments-list api user proj id) :data)))
-        (insert (format "*Pull comments (%s)\n" (length comments)))
+        (insert (format "*Pull comments (%s)\n\n" (length comments)))
         (insert-simple-comments comments)
         ))))
 
 (defun magit-gh-comments-insert-issue-comments (user proj id)
   (let ((repo (magit-gh-pulls-guess-repo)))
     (when repo
-      (let* ((api (magit-gh-issue-comments-get-api))
+      (let* ((api (magit-gh-comments-issue-comments-get-api))
              (comments (oref (gh-issue-comments-list api user proj id) :data)))
-        (insert (format "*Issue comments (%s)\n" (length comments)))
+        (insert (format "*Issue comments (%s)\n\n" (length comments)))
         (insert-simple-comments comments)
         ))))
+
+
+
+(require 'button)
+(defun bff (label action)
+  (insert-text-button label 'follow-link t 'action action))
+
+(defun my-open-revision-file (path commit-id position)
+  ;; open here commit in magit diff
+  (magit-find-file-other-window commit-id path)
+  (interactive)
+  (with-no-warnings
+    (goto-line position)))
 
 (defun magit-gh-comments-insert-commits-comments (user proj id)
   (let ((repo (magit-gh-pulls-guess-repo)))
     (when repo
       (let* ((pulls-api (magit-gh-pulls-get-api))
-             (comments-api (magit-gh-comments-get-api))
+             (repos-api (magit-gh-comments-repos-get-api))
              (commits (oref (gh-pulls-list-commits pulls-api user proj id) :data))
              comments)
 
-        (dolist (commit commits)
-          (let* ((commit-sha (oref commit :sha))
-                 (commit-comments (oref (gh-comments-list-commit comments-api user proj commit-sha) :data)))
-            (setq comments (append comments commit-comments))))
+        (magit-insert-section (commit-comments)
+          (magit-insert-heading "Commits comments:")
 
-        (insert (format "*Commits comments (%s)\n" (length comments)))
-        (insert-simple-comments comments)
+          (when (> (length commits) 0)
+
+            (dolist (commit commits)
+              (let* ((commit-sha (oref commit :sha))
+                     (c-comments (oref (gh-repos-comments-list-commit repos-api user proj commit-sha) :data)))
+                (setq comments (append comments c-comments))))
+
+            ;; (insert (format "*Commits comments (%s)\n\n" (length comments)))
+            (dolist (comment comments)
+              (lexical-let ((created-at (magit-gh-comments-format-time (oref comment :created_at)))
+                            (user (oref (oref comment :user) :login))
+                            (body (oref comment :body))
+                            (path (oref comment :path))
+                            (commit-id (oref comment :commit-id))
+                            (line (oref comment :line))
+                            (position "1"))
+
+                (magit-insert-section
+                  (commit-comments)
+                  (insert (format "[%s] %s\n" created-at user))
+                  (insert (format "sha: %s\n" commit-id))
+                  (bff path #'(lambda (b) (my-open-revision-file path commit-id line)))
+                  (insert (format "\nbody: \n%s\n\n" body))
+                  (magit-insert-heading)
+                  )))
+            ))
+
         ))))
 
 (defun magit-gh-comments-switch-to-comments-all-buffer (user proj id)
@@ -144,7 +181,8 @@
                                  ;; (magit-gh-comments-switch-to-comments-all-buffer user proj id)
                                  ))
       ;;TODO: make the buffer ui better re-use magit sections
-      (read-only-mode))))
+      ;; (read-only-mode)
+      )))
 
 (defun magit-gh-comments-view-all ()
   "view all comments for pull requests. For this we need all pull, issue and commits comments"
@@ -197,13 +235,14 @@ on line you want to comment"
              (repo (cdr repo-info))
              (rev (magit-gh-current-revision current))
              (position (magit-gh-diff-position current))
-             (api (magit-gh-comments-get-api))
+             (api (magit-gh-comments-repos-get-api))
              (body (read-from-minibuffer "Create line comment: "))
-             (comment (make-instance 'gh-comments-comment :body body :path file :position position)))
-        (let ((response (oref (gh-comments-new api owner repo rev comment) :data)))
+             (comment (make-instance 'gh-repos-comment :body body :path file :position position)))
+
+        (let ((response (oref (gh-repos-comments-new api owner repo rev comment) :data)))
           (message (format "response: ok"))) ;TODO: add error handling
-        )
-      )))
+
+        ))))
 
 ;;TODO: add confirmation before send ( yes, no, edit )
 ;;TODO: change minibuffer to buffer
@@ -217,10 +256,10 @@ on line you want to comment"
              (owner (car repo-info))
              (repo (cdr repo-info))
              (rev (magit-gh-current-revision current))
-             (api (magit-gh-comments-get-api))
+             (api (magit-gh-comments-repos-get-api))
              (body (read-from-minibuffer "Create: "))
-             (comment (make-instance 'gh-comments-comment :body body))
-             (response (oref (gh-comments-new api owner repo rev comment) :data)))
+             (comment (make-instance 'gh-repos-comment :body body))
+             (response (oref (gh-repos-comments-new api owner repo rev comment) :data)))
         (message (format "response: ok"))) ;; TODO: add error handling
       )))
 
@@ -251,7 +290,7 @@ on line you want to comment"
       (let* ((rev (magit-gh-current-revision (magit-current-section)))
              (user (car repo))
              (proj (cdr repo))
-             (api (magit-gh-comments-get-api))
+             (api (magit-gh-comments-repos-get-api))
              (comments (oref (gh-comments-list-commit api user proj rev) :data)))
         (magit-gh-comments-switch-to-comments-commit-buffer comments rev)
         ))))
