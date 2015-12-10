@@ -411,6 +411,7 @@ option, or inferred from remotes."
             (proj (cdr repo))
             (req (magit-gh-pulls-build-req user proj))
             (a (gh-pulls-new api user proj req)))
+
         (if (not (= (oref a :http-status) 201))
             (message "Error creating pull-request: %s.  Have you pushed the branch to github?" (cdr (assoc "Status" (oref a :headers))))
           (let ((url (oref (oref a :data) :html-url)))
@@ -423,8 +424,9 @@ option, or inferred from remotes."
   (interactive)
   (let ((creds (magit-gh-pulls-guess-repo)))
     (if (not (and creds (car creds) (cdr creds)))
-        (message "Remote repository is not configured or incorrect.")
+        (message "Remote repository is not configured or incorrect2")
       (magit-gh-pulls-purge-cache)
+
       (gh-pulls-list (magit-gh-pulls-get-api) (car creds) (cdr creds))
       (magit-refresh))))
 
