@@ -328,6 +328,7 @@ option, or inferred from remotes."
     (invalid-pull
      (error "This pull request refers to invalid reference"))))
 
+
 (defun magit-gh-pulls-fetch-commits ()
   (interactive)
   (magit-section-case
@@ -340,6 +341,7 @@ option, or inferred from remotes."
     (invalid-pull
      (error "This pull request refers to invalid reference"))))
 
+
 (defun magit-gh-pulls-url-for-pull (info)
   "Return github url for a pull request using INFO."
   (let ((url "https://github.com/%s/%s/pull/%s"))
@@ -351,6 +353,7 @@ option, or inferred from remotes."
     (magit-section-case
       (pull           (browse-url (magit-gh-pulls-url-for-pull info)))
       (unfetched-pull (browse-url (magit-gh-pulls-url-for-pull info))))))
+
 
 (defun magit-gh-pulls-purge-cache ()
   (let* ((api (magit-gh-pulls-get-api))
@@ -439,6 +442,7 @@ option, or inferred from remotes."
 (easy-menu-add-item 'magit-mode-menu
                     '("Extensions")
                     magit-gh-pulls-extension-menu)
+
 
 
 (magit-define-section-jumper magit-jump-to-pulls "Pull Requests" pulls)
