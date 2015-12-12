@@ -1,6 +1,7 @@
 (require 'ert)
 (require 'magit-gh-pulls)
 
+
 (ert-deftest magit-gh-pulls-collect-hostnames-test ()
   (let* ((sample-input '("extraneous" "Hostname one.other.com" "User doesntmatter" "HostName two.other.com"))
          (sample-data-end (-magit-gh-pulls-filter-and-split-host-lines sample-input))
@@ -52,5 +53,5 @@
 (ert-deftest test-magic-gh-pulls-parse-url-invalid ()
   (should (eq nil (magit-gh-pulls-parse-url "http://google.com" '()))))
 
-(ert-deftest test-magic-gh-pulls-parse-url-garbage ()
+(ert-deftest test-magic-gh-pulls-parse-url-garbage1 ()
   (should (eq nil (magit-gh-pulls-parse-url "08h3fiuandiu" '()))))

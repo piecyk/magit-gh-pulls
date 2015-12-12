@@ -327,6 +327,7 @@ option, or inferred from remotes."
     (invalid-pull
      (error "This pull request refers to invalid reference"))))
 
+
 (defun magit-gh-pulls-fetch-commits ()
   (interactive)
   (magit-section-case
@@ -339,6 +340,7 @@ option, or inferred from remotes."
     (invalid-pull
      (error "This pull request refers to invalid reference"))))
 
+
 (defun magit-gh-pulls-url-for-pull (info)
   "Return github url for a pull request using INFO."
   (let ((url "https://github.com/%s/%s/pull/%s"))
@@ -350,6 +352,7 @@ option, or inferred from remotes."
     (magit-section-case
       (pull           (browse-url (magit-gh-pulls-url-for-pull info)))
       (unfetched-pull (browse-url (magit-gh-pulls-url-for-pull info))))))
+
 
 (defun magit-gh-pulls-purge-cache ()
   (let* ((api (magit-gh-pulls-get-api))
@@ -409,6 +412,7 @@ option, or inferred from remotes."
             (proj (cdr repo))
             (req (magit-gh-pulls-build-req user proj))
             (a (gh-pulls-new api user proj req)))
+
         (if (not (= (oref a :http-status) 201))
             (message "Error creating pull-request: %s.  Have you pushed the branch to github?" (cdr (assoc "Status" (oref a :headers))))
           (let ((url (oref (oref a :data) :html-url)))
@@ -421,8 +425,9 @@ option, or inferred from remotes."
   (interactive)
   (let ((creds (magit-gh-pulls-guess-repo)))
     (if (not (and creds (car creds) (cdr creds)))
-        (message "Remote repository is not configured or incorrect.")
+        (message "Remote repository is not configured or incorrect2")
       (magit-gh-pulls-purge-cache)
+
       (gh-pulls-list (magit-gh-pulls-get-api) (car creds) (cdr creds))
       (magit-refresh))))
 
@@ -440,6 +445,7 @@ option, or inferred from remotes."
 (easy-menu-add-item 'magit-mode-menu
                     '("Extensions")
                     magit-gh-pulls-extension-menu)
+
 
 
 (magit-define-section-jumper magit-jump-to-pulls "Pull Requests" pulls)
