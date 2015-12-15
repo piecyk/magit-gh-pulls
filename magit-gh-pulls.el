@@ -58,6 +58,7 @@
 (require 'eieio)
 
 (require 'magit)
+(require 'magit-gh-comments)
 (require 'gh)
 (require 'gh-pulls)
 (require 'pcache)
@@ -484,7 +485,8 @@ option, or inferred from remotes."
               (?b "Make branch" magit-gh-pulls-create-branch)
               (?m "Merge"    magit-gh-pulls-merge-pull-request)
               (?c "Create new PR" magit-gh-pulls-create-pull-request)
-              (?o "Open in browser" magit-gh-pulls-open-in-browser))
+              (?o "Open in browser" magit-gh-pulls-open-in-browser)
+              (?v "View all comments" magit-gh-comments-view-all))
   :default-action 'magit-gh-pulls-reload)
 
 (provide 'magit-gh-pulls)
