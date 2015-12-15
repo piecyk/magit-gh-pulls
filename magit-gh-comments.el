@@ -279,13 +279,37 @@
   (gh-issue-comments-api "api" :sync t :num-retries 1 :cache (gh-cache "cache")))
 
 
+(defun magit-gh-comments-cleanup-carriage-return ()
+  "Remove ^M from current buffer."
+  (beginning-of-buffer)
+  (replace-regexp "" "")
+  (beginning-of-buffer))
+
 (defun magit-gh-comments-format-time (time)
   "Format TIME with 'nice' style for comments."
   (let ((format "%d/%m/%Y %H:%M:%S"))
     (format-time-string format (date-to-time time))))
 
+
+(defun magit-gh-comments-view-file ()
+  (interactive)
+  (let ((comment (magit-section-value (magit-current-section))))
+    (magit-find-file-other-window (oref comment :commit-id)
+                                  (oref comment :path))))
+
+(magit-define-popup magit-gh-comments-popup
+  'magit-commands
+  :actions  '((?g "Reload" magit-gh-pulls-reload)
+              (?v "View file" magit-gh-comments-view-file)))
+
+(defvar magit-gh-comments-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "@") 'magit-gh-comments-popup)
+    map))
+
 (define-derived-mode magit-gh-comments-mode magit-mode "Magit Github Comments"
   :group 'magit-gh-comments
+  :keymap 'magit-gh-comments-mode-map
   (hack-dir-local-variables-non-file-buffer))
 
 (defcustom magit-gh-comments-mode-hook nil
@@ -301,13 +325,21 @@
       (lexical-let ((created-at (magit-gh-comments-format-time (oref comment :created_at)))
                     (user (oref (oref comment :user) :login))
                     (body (oref comment :body))
+                    (commit-id (oref comment :commit-id))
+                    (diff-hunk (oref comment :diff-hunk))
                     (path (oref comment :path))
-                    (position (oref comment :position)))
+                    (original-position (oref comment :original-position))
+                    (position (oref comment :position))
+                    )
 
         (magit-insert-section (gh-comments-pull comment)
           (magit-insert-heading (format " [%s] %s\n" created-at user))
-          (insert (format " path:    %s\n" path))
-          (insert (format " postion: %s\n" position))
+          (insert (format " path              : %s\n" path))
+          (insert (format " original-position : %s\n" original-position))
+          (insert (format " postion           : %s\n" position))
+          (magit-insert-section (gh-comments-pull-diff nil t)
+            (magit-insert-heading " diff:\n")
+            (insert (format "%s\n" diff-hunk)))
           (insert (format " body: \n%s\n\n" body))
 
           )))))
@@ -371,8 +403,9 @@
 
     (magit-insert-section (gh-comments-commit)
       (magit-insert-heading "Commit comments:")
-      (apply `magit-gh-comments-insert-commits-comments info))
-    ))
+      (apply `magit-gh-comments-insert-commits-comments info)))
+
+  (magit-gh-comments-cleanup-carriage-return))
 
 
 (defun magit-gh-comments-view-all ()
